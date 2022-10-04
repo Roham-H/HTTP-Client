@@ -1,38 +1,44 @@
 import javax.swing.*;
+import javax.swing.tree.DefaultMutableTreeNode;
 import java.awt.*;
 import java.awt.event.*;
-import java.security.Key;
+import java.io.Serializable;
+import java.util.HashMap;
 
-public class ClientGUI {
 
+/**
+ * The base of GUI, consists of a List of requests,
+ * and a split pane which also consists of the request input panel and its response window
+ */
+public class ClientGUI implements Serializable {
+
+//    The main frame
     private static JFrame frame;
+//    The frame used to change options, such as theme
     private final JFrame optionsFrame;
-    private final JSplitPane mainPanel;
-    private final CenterPanel centerPanel;
-    private final LeftPanel leftPanel;
-    private JCheckBox followRedirect;
+    private static JSplitPane mainPanel = new JSplitPane();
+    private final RequestListPanel requestListPanel;
+    private static JCheckBox followRedirect;
     private JCheckBox hideOnSystemTray;
 
-    public ClientGUI(){
+    public ClientGUI() {
 
         frame = new JFrame("HTTP Client");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setLocationRelativeTo(null);
         frame.setBounds(250, 150, 1000, 550);
-        leftPanel = new LeftPanel();
+        requestListPanel = new RequestListPanel();
         mainPanel = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        centerPanel = new CenterPanel();
 
-        mainPanel.add(leftPanel);
-        mainPanel.add(centerPanel);
+        mainPanel.add(requestListPanel);
         frame.setContentPane(mainPanel);
+        frame.addWindowListener(new SaveBeforeClose());
         frame.setMinimumSize(new Dimension(500, 400));
         JMenuBar menuBar = createMenuBar();
         frame.setJMenuBar(menuBar);
         frame.pack();
+        frame.setMaximumSize(Toolkit.getDefaultToolkit().getScreenSize());
         mainPanel.setDividerSize(5);
-        centerPanel.setDividerSize(5);
-//        centerPanel.setDividerLocation(centerPanel.getLeftComponent().getPreferredSize().width);
         frame.addWindowListener(new WindowAdapter() {
             @Override
             public void windowClosing(WindowEvent e) {
@@ -42,14 +48,31 @@ public class ClientGUI {
         optionsFrame = makeOptionsFrame();
     }
 
+    /**
+     * replaces the response window with the selected request's response window
+     * @param requestPanel of the response window which is intended to be shown
+     */
+    public static void switchRequest(RequestPanel requestPanel){
+        if (mainPanel.getRightComponent() != null)
+            mainPanel.remove(mainPanel.getRightComponent());
+        mainPanel.setRightComponent(requestPanel);
+        frame.pack();
+    }
+
+    /**
+     * Makes the frame visible
+     */
     public void show(){
         frame.setVisible(true);
     }
 
+    /**
+     * @return GUI's main frame
+     */
     public static JFrame getFrame() {
         return frame;
     }
-
+//    The menubar which allows the user to change the settings of Application such as toggling its view mode
     private JMenuBar createMenuBar(){
 
         MenuBarHandler menuBarHandler = new MenuBarHandler();
@@ -85,7 +108,7 @@ public class ClientGUI {
         helpItem.addActionListener(menuBarHandler);
         return menuBar;
     }
-
+//    Handles the menubar's components
     private class MenuBarHandler implements ActionListener{
 
         @Override
@@ -105,11 +128,11 @@ public class ClientGUI {
                     }
                     break;
                 case "Toggle Sidebar":
-                    if (leftPanel.isVisible()) {
-                        leftPanel.setVisible(false);
+                    if (requestListPanel.isVisible()) {
+                        requestListPanel.setVisible(false);
                         mainPanel.setEnabled(false);
                     }else{
-                        leftPanel.setVisible(true);
+                        requestListPanel.setVisible(true);
                         mainPanel.setEnabled(true);
                         mainPanel.setDividerLocation(mainPanel.getLeftComponent().getPreferredSize().width);
                     }
@@ -122,16 +145,10 @@ public class ClientGUI {
                     }
                     break;
                 case "Light theme":
-                    if (!mainPanel.getBackground().equals(Color.WHITE)) {
-                        mainPanel.setBackground(Color.WHITE);
-                        leftPanel.setBackground(Color.WHITE);
-                    }
+                    changeTheme(0);
                     break;
                 case "Dark theme":
-                    if (mainPanel.getBackground().equals(Color.WHITE)) {
-                        centerPanel.setBackground(new Color(0xE6000000, true));
-                        leftPanel.setBackground(new Color(0xFF001E));
-                    }
+                    changeTheme(1);
                     break;
                 case "About":
                     showAbout().setVisible(true);
@@ -142,7 +159,54 @@ public class ClientGUI {
             }
         }
     }
+//    Saves the current frame with all its settings
+    private class SaveBeforeClose implements WindowListener{
 
+        @Override
+        public void windowOpened(WindowEvent e) {
+
+        }
+
+        @Override
+        public void windowClosing(WindowEvent e) {
+            if (e.getSource().equals(frame)){
+                main.save();
+            }
+        }
+
+        @Override
+        public void windowClosed(WindowEvent e) {
+
+        }
+
+        @Override
+        public void windowIconified(WindowEvent e) {
+
+        }
+
+        @Override
+        public void windowDeiconified(WindowEvent e) {
+
+        }
+
+        @Override
+        public void windowActivated(WindowEvent e) {
+
+        }
+
+        @Override
+        public void windowDeactivated(WindowEvent e) {
+
+        }
+    }
+//    Changes the main frame and its main panels theme
+    private void changeTheme(int type){
+        frame.setBackground(Color.DARK_GRAY);
+        mainPanel.setBackground(Color.DARK_GRAY);
+        ((RequestPanel) mainPanel.getRightComponent()).changeTheme(type);
+        ((RequestListPanel) mainPanel.getLeftComponent()).changeTheme(type);
+    }
+//    Shows the app's and its developer's info
     private JFrame showAbout(){
         JFrame aboutFrame = new JFrame("About");
         aboutFrame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
@@ -155,7 +219,7 @@ public class ClientGUI {
         JLabel developerEmail = new JLabel("Email:  rohamhayedi@gmail.com");
         JPanel aboutPanel = new JPanel(new GridLayout(0, 2));
         JPanel aboutMainPanel = new JPanel(new BorderLayout());
-        aboutFrame.add(aboutMainPanel);
+        aboutFrame.setContentPane(aboutMainPanel);
         aboutMainPanel.add(applicationName, BorderLayout.NORTH);
         aboutMainPanel.add(aboutPanel, BorderLayout.CENTER);
         aboutPanel.add(developerName);
@@ -164,15 +228,15 @@ public class ClientGUI {
         aboutFrame.pack();
         return aboutFrame;
     }
-
+//    Creates the options frame, which pops up to allow the user to change settings, such as setting the theme or follow redirect checkbox
     private JFrame makeOptionsFrame(){
-
         MenuBarHandler menuBarHandler = new MenuBarHandler();
         JFrame optionsFrame = new JFrame("Options");
         optionsFrame.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
         optionsFrame.setResizable(false);
         optionsFrame.setLocationRelativeTo(frame);
         followRedirect = new JCheckBox("follow redirect");
+        followRedirect.setSelected(true);
         followRedirect.addActionListener(menuBarHandler);
         hideOnSystemTray = new JCheckBox("Hide to tray");
         hideOnSystemTray.addActionListener(menuBarHandler);
@@ -184,21 +248,29 @@ public class ClientGUI {
         dark.addActionListener(menuBarHandler);
         themes.add(light);
         themes.add(dark);
-        GroupLayout layout = new GroupLayout(optionsFrame.getContentPane());
-        optionsFrame.setLayout(layout);
-        layout.setAutoCreateContainerGaps(true);
-        layout.setAutoCreateGaps(true);
-        layout.setHorizontalGroup(layout.createSequentialGroup().addGroup(layout.createParallelGroup()
-        .addComponent(followRedirect)
-        .addComponent(light)
-        .addComponent(dark))
-        .addComponent(hideOnSystemTray));
-        layout.setVerticalGroup(layout.createSequentialGroup().addGroup(layout.createParallelGroup()
-        .addComponent(followRedirect)
-        .addComponent(hideOnSystemTray))
-        .addComponent(light)
-        .addComponent(dark));
+        optionsFrame.setLayout(new GridBagLayout());
+        GridBagConstraints c = new GridBagConstraints();
+        optionsFrame.add(hideOnSystemTray, c);
+        optionsFrame.add(followRedirect, c);
+        c.gridy = 1;
+        optionsFrame.add(light, c);
+        c.gridy = 2;
+        optionsFrame.add(dark, c);
         optionsFrame.pack();
         return optionsFrame;
+    }
+
+    /**
+     * @return the request panel
+     */
+    public static RequestPanel getRequestPanel() {
+        return (RequestPanel) mainPanel.getRightComponent();
+    }
+
+    /**
+     * @return {@code true} if follow redirect is selected
+     */
+    public static boolean getFollowRedirect() {
+        return followRedirect.isSelected();
     }
 }
